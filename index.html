@@ -1,0 +1,454 @@
+import { useState, useEffect } from "react";
+
+const COLORS = {
+  bg: "#0f1117",
+  card: "#1a1d27",
+  border: "#2a2d3e",
+  gold: "#f5c842",
+  goldLight: "#fde68a",
+  green: "#22c55e",
+  red: "#ef4444",
+  blue: "#60a5fa",
+  text: "#e2e8f0",
+  muted: "#64748b",
+};
+
+const style = (obj) => obj;
+
+// ── Storage helpers ──────────────────────────────────────────────
+async function loadData(key) {
+  try {
+    const r = await window.storage.get(key, false);
+    return r ? JSON.parse(r.value) : null;
+  } catch { return null; }
+}
+async function saveData(key, value) {
+  try { await window.storage.set(key, JSON.stringify(value), false); } catch {}
+}
+
+// ── Helpers ──────────────────────────────────────────────────────
+const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const currentMonth = () => {
+  const d = new Date();
+  return `${months[d.getMonth()]} ${d.getFullYear()}`;
+};
+const formatCurrency = (n) =>
+  "₹" + Number(n || 0).toLocaleString("en-IN");
+
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+// ── CSS ───────────────────────────────────────────────────────────
+const css = `
+@import url('https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0f1117;color:#e2e8f0;font-family:'Sora',sans-serif;}
+.mono{font-family:'JetBrains Mono',monospace;}
+input,select,textarea{background:#12151f;border:1px solid #2a2d3e;color:#e2e8f0;border-radius:8px;padding:10px 14px;font-family:'Sora',sans-serif;font-size:14px;width:100%;outline:none;transition:border .2s;}
+input:focus,select:focus{border-color:#f5c842;}
+button{cursor:pointer;font-family:'Sora',sans-serif;border:none;border-radius:8px;transition:all .15s;}
+::-webkit-scrollbar{width:6px;}
+::-webkit-scrollbar-track{background:#1a1d27;}
+::-webkit-scrollbar-thumb{background:#2a2d3e;border-radius:3px;}
+.fade-in{animation:fadeIn .3s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+.pulse{animation:pulse 2s infinite;}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.6;}}
+`;
+
+// ── Sub-components ────────────────────────────────────────────────
+function Badge({ status }) {
+  const map = {
+    Paid: { bg: "#14532d", color: "#4ade80" },
+    Pending: { bg: "#7c2d12", color: "#fb923c" },
+    Active: { bg: "#1e3a5f", color: "#60a5fa" },
+    Inactive: { bg: "#3b0764", color: "#a78bfa" },
+  };
+  const s = map[status] || { bg: "#1e293b", color: "#94a3b8" };
+  return (
+    <span style={{ background: s.bg, color: s.color, borderRadius: 20, padding: "2px 10px", fontSize: 12, fontWeight: 600 }}>
+      {status}
+    </span>
+  );
+}
+
+function StatCard({ icon, label, value, sub, color = COLORS.gold }) {
+  return (
+    <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: "20px 24px", flex: 1, minWidth: 160 }}>
+      <div style={{ fontSize: 24, marginBottom: 8 }}>{icon}</div>
+      <div style={{ fontSize: 28, fontWeight: 700, color, fontFamily: "'JetBrains Mono',monospace" }}>{value}</div>
+      <div style={{ fontSize: 13, color: COLORS.muted, marginTop: 4 }}>{label}</div>
+      {sub && <div style={{ fontSize: 11, color: COLORS.muted, marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+}
+
+// ── Main App ──────────────────────────────────────────────────────
+export default function App() {
+  const [tab, setTab] = useState("dashboard");
+  const [members, setMembers] = useState([]);
+  const [payments, setPayments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [showAddPayment, setShowAddPayment] = useState(false);
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [search, setSearch] = useState("");
+  const [toast, setToast] = useState(null);
+
+  // Load
+  useEffect(() => {
+    (async () => {
+      const m = await loadData("kmbsc_members");
+      const p = await loadData("kmbsc_payments");
+      if (m) setMembers(m);
+      if (p) setPayments(p);
+      setLoading(false);
+    })();
+  }, []);
+
+  // Save on change
+  useEffect(() => { if (!loading) saveData("kmbsc_members", members); }, [members]);
+  useEffect(() => { if (!loading) saveData("kmbsc_payments", payments); }, [payments]);
+
+  const showToast = (msg, type = "success") => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 2500);
+  };
+
+  // Stats
+  const totalChitAmount = members.reduce((s, m) => s + Number(m.chitAmount || 0), 0);
+  const thisMonth = currentMonth();
+  const paidThisMonth = payments.filter(p => p.month === thisMonth && p.status === "Paid").length;
+  const pendingThisMonth = members.length - paidThisMonth;
+  const totalCollected = payments.filter(p => p.status === "Paid").reduce((s, p) => s + Number(p.amount || 0), 0);
+
+  return (
+    <div style={{ minHeight: "100vh", background: COLORS.bg }}>
+      <style>{css}</style>
+
+      {/* Toast */}
+      {toast && (
+        <div style={{ position: "fixed", top: 20, right: 20, zIndex: 9999, background: toast.type === "success" ? "#14532d" : "#7f1d1d", color: "#fff", padding: "12px 20px", borderRadius: 10, fontSize: 14, fontWeight: 600, boxShadow: "0 4px 20px rgba(0,0,0,.4)" }}>
+          {toast.type === "success" ? "✅" : "❌"} {toast.msg}
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ background: COLORS.card, borderBottom: `1px solid ${COLORS.border}`, padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between", height: 64 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <div style={{ width: 36, height: 36, background: COLORS.gold, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🏛️</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 15, color: COLORS.gold, letterSpacing: ".5px" }}>KMBSC</div>
+            <div style={{ fontSize: 11, color: COLORS.muted }}>Kovil Mutual Benefit Savings Chit</div>
+          </div>
+        </div>
+        <div style={{ fontSize: 13, color: COLORS.muted }} className="mono">{thisMonth}</div>
+      </div>
+
+      {/* Nav */}
+      <div style={{ background: COLORS.card, borderBottom: `1px solid ${COLORS.border}`, padding: "0 24px", display: "flex", gap: 4 }}>
+        {[["dashboard","📊 Dashboard"],["members","👥 Members"],["payments","💳 Payments"]].map(([id, label]) => (
+          <button key={id} onClick={() => setTab(id)} style={{ padding: "14px 18px", background: "none", color: tab === id ? COLORS.gold : COLORS.muted, fontWeight: tab === id ? 700 : 400, borderBottom: tab === id ? `2px solid ${COLORS.gold}` : "2px solid transparent", borderRadius: 0, fontSize: 14 }}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 80, color: COLORS.muted }} className="pulse">Loading...</div>
+        ) : (
+          <>
+            {tab === "dashboard" && <Dashboard members={members} payments={payments} totalChitAmount={totalChitAmount} paidThisMonth={paidThisMonth} pendingThisMonth={pendingThisMonth} totalCollected={totalCollected} thisMonth={thisMonth} />}
+            {tab === "members" && <Members members={members} setMembers={setMembers} payments={payments} search={search} setSearch={setSearch} showAddMember={showAddMember} setShowAddMember={setShowAddMember} selectedMember={selectedMember} setSelectedMember={setSelectedMember} showToast={showToast} />}
+            {tab === "payments" && <Payments members={members} payments={payments} setPayments={setPayments} showAddPayment={showAddPayment} setShowAddPayment={setShowAddPayment} thisMonth={thisMonth} showToast={showToast} />}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ── Dashboard ─────────────────────────────────────────────────────
+function Dashboard({ members, payments, totalChitAmount, paidThisMonth, pendingThisMonth, totalCollected, thisMonth }) {
+  const recentPayments = [...payments].sort((a,b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+
+  return (
+    <div className="fade-in">
+      <h2 style={{ fontSize: 22, fontWeight: 700, marginBottom: 20, color: COLORS.text }}>Dashboard</h2>
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
+        <StatCard icon="👥" label="Total Members" value={members.length} color={COLORS.blue} />
+        <StatCard icon="💰" label="Total Chit Value" value={formatCurrency(totalChitAmount)} color={COLORS.gold} />
+        <StatCard icon="✅" label={`Paid (${thisMonth})`} value={paidThisMonth} color={COLORS.green} />
+        <StatCard icon="⏳" label="Pending" value={pendingThisMonth} color="#fb923c" />
+        <StatCard icon="🏦" label="Total Collected" value={formatCurrency(totalCollected)} color={COLORS.gold} />
+      </div>
+
+      {/* Payment progress */}
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: 20, marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+          <span style={{ fontWeight: 600 }}>{thisMonth} Collection Progress</span>
+          <span className="mono" style={{ color: COLORS.gold }}>{members.length > 0 ? Math.round(paidThisMonth / members.length * 100) : 0}%</span>
+        </div>
+        <div style={{ background: "#1e293b", borderRadius: 99, height: 10 }}>
+          <div style={{ background: `linear-gradient(90deg, ${COLORS.gold}, #f97316)`, borderRadius: 99, height: 10, width: `${members.length > 0 ? paidThisMonth / members.length * 100 : 0}%`, transition: "width .5s" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: COLORS.muted, marginTop: 6 }}>
+          <span>{paidThisMonth} paid</span><span>{members.length - paidThisMonth} pending</span>
+        </div>
+      </div>
+
+      {/* Recent */}
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: 20 }}>
+        <h3 style={{ marginBottom: 14, fontSize: 15, fontWeight: 600 }}>Recent Payments</h3>
+        {recentPayments.length === 0 ? (
+          <div style={{ color: COLORS.muted, textAlign: "center", padding: 30 }}>No payments yet</div>
+        ) : recentPayments.map(p => (
+          <div key={p.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{p.memberName}</div>
+              <div style={{ fontSize: 12, color: COLORS.muted }}>{p.month} · {p.date}</div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div className="mono" style={{ color: COLORS.green, fontWeight: 700 }}>{formatCurrency(p.amount)}</div>
+              <Badge status={p.status} />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Members ───────────────────────────────────────────────────────
+function Members({ members, setMembers, payments, search, setSearch, showAddMember, setShowAddMember, selectedMember, setSelectedMember, showToast }) {
+  const [form, setForm] = useState({ name: "", phone: "", chitAmount: "", joinDate: "", status: "Active", notes: "" });
+  const [editId, setEditId] = useState(null);
+
+  const filtered = members.filter(m => m.name.toLowerCase().includes(search.toLowerCase()) || m.phone.includes(search));
+
+  const openAdd = () => { setForm({ name:"",phone:"",chitAmount:"",joinDate:"",status:"Active",notes:"" }); setEditId(null); setShowAddMember(true); };
+  const openEdit = (m) => { setForm({ ...m }); setEditId(m.id); setShowAddMember(true); };
+
+  const save = () => {
+    if (!form.name || !form.phone) return;
+    if (editId) {
+      setMembers(prev => prev.map(m => m.id === editId ? { ...m, ...form } : m));
+      showToast("Member updated!");
+    } else {
+      setMembers(prev => [...prev, { ...form, id: uid() }]);
+      showToast("Member added!");
+    }
+    setShowAddMember(false);
+  };
+
+  const del = (id) => {
+    if (!confirm("Delete this member?")) return;
+    setMembers(prev => prev.filter(m => m.id !== id));
+    showToast("Deleted", "error");
+  };
+
+  const memberPayments = (id) => payments.filter(p => p.memberId === id);
+
+  return (
+    <div className="fade-in">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700 }}>Members ({members.length})</h2>
+        <button onClick={openAdd} style={{ background: COLORS.gold, color: "#000", fontWeight: 700, padding: "10px 20px", fontSize: 14 }}>+ Add Member</button>
+      </div>
+
+      <input placeholder="🔍 Search by name or phone..." value={search} onChange={e => setSearch(e.target.value)} style={{ marginBottom: 16 }} />
+
+      {/* Member cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
+        {filtered.map(m => {
+          const mp = memberPayments(m.id);
+          const paid = mp.filter(p => p.status === "Paid").length;
+          return (
+            <div key={m.id} style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 14, padding: 18, cursor: "pointer" }} onClick={() => setSelectedMember(m)}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 16 }}>{m.name}</div>
+                  <div className="mono" style={{ fontSize: 12, color: COLORS.muted }}>{m.phone}</div>
+                </div>
+                <Badge status={m.status} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+                <span style={{ color: COLORS.muted }}>Chit Amount</span>
+                <span className="mono" style={{ color: COLORS.gold, fontWeight: 700 }}>{formatCurrency(m.chitAmount)}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginTop: 4 }}>
+                <span style={{ color: COLORS.muted }}>Payments Made</span>
+                <span className="mono" style={{ color: COLORS.green }}>{paid}</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 14 }} onClick={e => e.stopPropagation()}>
+                <button onClick={() => openEdit(m)} style={{ flex: 1, background: "#1e293b", color: COLORS.blue, padding: "7px 0", fontSize: 13 }}>✏️ Edit</button>
+                <button onClick={() => del(m.id)} style={{ flex: 1, background: "#1e293b", color: COLORS.red, padding: "7px 0", fontSize: 13 }}>🗑️ Delete</button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {filtered.length === 0 && <div style={{ textAlign: "center", padding: 60, color: COLORS.muted }}>No members found</div>}
+
+      {/* Add/Edit Modal */}
+      {showAddMember && (
+        <Modal title={editId ? "Edit Member" : "Add Member"} onClose={() => setShowAddMember(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <input placeholder="Full Name *" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} />
+            <input placeholder="Phone Number *" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+            <input placeholder="Chit Amount (₹)" type="number" value={form.chitAmount} onChange={e => setForm(f => ({ ...f, chitAmount: e.target.value }))} />
+            <input placeholder="Join Date" type="date" value={form.joinDate} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))} />
+            <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+              <option>Active</option><option>Inactive</option>
+            </select>
+            <textarea placeholder="Notes (optional)" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ background: "#12151f", border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 8, padding: "10px 14px", fontFamily: "Sora,sans-serif", resize: "vertical" }} />
+            <button onClick={save} style={{ background: COLORS.gold, color: "#000", fontWeight: 700, padding: 12, fontSize: 15 }}>
+              {editId ? "Update Member" : "Add Member"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Member Detail Modal */}
+      {selectedMember && (
+        <Modal title={selectedMember.name} onClose={() => setSelectedMember(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[["📞 Phone", selectedMember.phone], ["💰 Chit Amount", formatCurrency(selectedMember.chitAmount)], ["📅 Join Date", selectedMember.joinDate || "-"], ["📝 Notes", selectedMember.notes || "-"]].map(([k, v]) => (
+              <div key={k} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+                <span style={{ color: COLORS.muted, fontSize: 13 }}>{k}</span>
+                <span style={{ fontWeight: 600, fontSize: 13 }}>{v}</span>
+              </div>
+            ))}
+            <h4 style={{ marginTop: 10, marginBottom: 6, color: COLORS.gold }}>Payment History</h4>
+            {memberPayments(selectedMember.id).length === 0
+              ? <div style={{ color: COLORS.muted, textAlign: "center", padding: 20 }}>No payments yet</div>
+              : memberPayments(selectedMember.id).map(p => (
+                <div key={p.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, padding: "6px 0", borderBottom: `1px solid ${COLORS.border}` }}>
+                  <span>{p.month}</span>
+                  <span className="mono" style={{ color: COLORS.green }}>{formatCurrency(p.amount)}</span>
+                  <Badge status={p.status} />
+                </div>
+              ))}
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Payments ──────────────────────────────────────────────────────
+function Payments({ members, payments, setPayments, showAddPayment, setShowAddPayment, thisMonth, showToast }) {
+  const [form, setForm] = useState({ memberId: "", month: thisMonth, amount: "", date: new Date().toISOString().slice(0, 10), status: "Paid", notes: "" });
+  const [filterMonth, setFilterMonth] = useState(thisMonth);
+
+  const allMonths = [...new Set(payments.map(p => p.month))];
+  if (!allMonths.includes(thisMonth)) allMonths.unshift(thisMonth);
+
+  const filtered = payments.filter(p => p.month === filterMonth);
+
+  const getMemberById = (id) => members.find(m => m.id === id);
+
+  const addPayment = () => {
+    if (!form.memberId) return;
+    const member = getMemberById(form.memberId);
+    setPayments(prev => [...prev, { ...form, id: uid(), memberName: member?.name || "-", amount: form.amount || member?.chitAmount || 0 }]);
+    showToast("Payment recorded!");
+    setShowAddPayment(false);
+  };
+
+  const delPayment = (id) => {
+    setPayments(prev => prev.filter(p => p.id !== id));
+    showToast("Payment deleted", "error");
+  };
+
+  // Pending members this month
+  const paidIds = filtered.filter(p => p.status === "Paid").map(p => p.memberId);
+  const pendingMembers = members.filter(m => !paidIds.includes(m.id));
+
+  return (
+    <div className="fade-in">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+        <h2 style={{ fontSize: 22, fontWeight: 700 }}>Payments</h2>
+        <button onClick={() => setShowAddPayment(true)} style={{ background: COLORS.gold, color: "#000", fontWeight: 700, padding: "10px 20px", fontSize: 14 }}>+ Record Payment</button>
+      </div>
+
+      {/* Month filter */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
+        {allMonths.map(m => (
+          <button key={m} onClick={() => setFilterMonth(m)} style={{ padding: "7px 16px", background: filterMonth === m ? COLORS.gold : COLORS.card, color: filterMonth === m ? "#000" : COLORS.muted, border: `1px solid ${filterMonth === m ? COLORS.gold : COLORS.border}`, fontWeight: filterMonth === m ? 700 : 400, fontSize: 13 }}>
+            {m}
+          </button>
+        ))}
+      </div>
+
+      {/* Pending members */}
+      {pendingMembers.length > 0 && (
+        <div style={{ background: "#1c1208", border: "1px solid #92400e", borderRadius: 12, padding: 14, marginBottom: 18 }}>
+          <div style={{ fontWeight: 700, color: "#fb923c", marginBottom: 8 }}>⏳ Pending ({pendingMembers.length})</div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            {pendingMembers.map(m => (
+              <span key={m.id} style={{ background: "#292117", color: "#fbbf24", padding: "4px 12px", borderRadius: 20, fontSize: 13 }}>{m.name}</span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Payment list */}
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 14, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px 100px 80px", padding: "12px 18px", borderBottom: `1px solid ${COLORS.border}`, fontSize: 12, color: COLORS.muted, fontWeight: 600 }}>
+          <span>MEMBER</span><span>AMOUNT</span><span>DATE</span><span>STATUS</span><span></span>
+        </div>
+        {filtered.length === 0
+          ? <div style={{ textAlign: "center", padding: 40, color: COLORS.muted }}>No payments for {filterMonth}</div>
+          : filtered.map(p => (
+            <div key={p.id} style={{ display: "grid", gridTemplateColumns: "1fr 120px 120px 100px 80px", padding: "14px 18px", borderBottom: `1px solid ${COLORS.border}`, alignItems: "center" }}>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{p.memberName}</div>
+                {p.notes && <div style={{ fontSize: 11, color: COLORS.muted }}>{p.notes}</div>}
+              </div>
+              <span className="mono" style={{ color: COLORS.green, fontWeight: 700 }}>{formatCurrency(p.amount)}</span>
+              <span style={{ fontSize: 13, color: COLORS.muted }}>{p.date}</span>
+              <Badge status={p.status} />
+              <button onClick={() => delPayment(p.id)} style={{ background: "none", color: COLORS.red, fontSize: 18 }}>🗑️</button>
+            </div>
+          ))}
+      </div>
+
+      {/* Add Payment Modal */}
+      {showAddPayment && (
+        <Modal title="Record Payment" onClose={() => setShowAddPayment(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <select value={form.memberId} onChange={e => { const m = getMemberById(e.target.value); setForm(f => ({ ...f, memberId: e.target.value, amount: m?.chitAmount || "" })); }}>
+              <option value="">Select Member *</option>
+              {members.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+            </select>
+            <input placeholder="Month (e.g. Apr 2026)" value={form.month} onChange={e => setForm(f => ({ ...f, month: e.target.value }))} />
+            <input placeholder="Amount (₹)" type="number" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} />
+            <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
+            <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}>
+              <option>Paid</option><option>Pending</option>
+            </select>
+            <textarea placeholder="Notes (optional)" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} style={{ background: "#12151f", border: `1px solid ${COLORS.border}`, color: COLORS.text, borderRadius: 8, padding: "10px 14px", fontFamily: "Sora,sans-serif", resize: "vertical" }} />
+            <button onClick={addPayment} style={{ background: COLORS.gold, color: "#000", fontWeight: 700, padding: 12, fontSize: 15 }}>Record Payment</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ── Modal ─────────────────────────────────────────────────────────
+function Modal({ title, children, onClose }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.7)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }} onClick={onClose}>
+      <div style={{ background: COLORS.card, border: `1px solid ${COLORS.border}`, borderRadius: 16, padding: 24, width: "100%", maxWidth: 440, maxHeight: "90vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 18 }}>
+          <h3 style={{ fontSize: 18, fontWeight: 700 }}>{title}</h3>
+          <button onClick={onClose} style={{ background: "none", color: COLORS.muted, fontSize: 20 }}>✕</button>
+        </div>
+        {children}
+      </div>
+    </div>
+  );
+}
