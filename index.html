@@ -18,7 +18,7 @@ input{width:100%;padding:10px;margin:5px 0;border-radius:6px;border:none}
 
 <body>
 
-<header>KMBSC Portal 🔥 (Safe Firebase)</header>
+<header>KMBSC Portal 🔥 (Stable)</header>
 
 <div class="container">
 
@@ -35,6 +35,95 @@ input{width:100%;padding:10px;margin:5px 0;border-radius:6px;border:none}
 </div>
 
 <div class="card">
+<h3>Add Payment</h3>
+<input id="pname" placeholder="Member Name">
+<input id="pamount" placeholder="Amount">
+<button onclick="addPayment()">Add</button>
+</div>
+
+<div class="card">
+<h3>Payments</h3>
+<div id="payments"></div>
+</div>
+
+</div>
+
+<!-- ✅ Firebase OLD (STABLE) -->
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+
+<script>
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBVGVu59jDZybPFAX_pRisSrQRoXHQ0EWY",
+  authDomain: "kmbsc-chit.firebaseapp.com",
+  databaseURL: "https://kmbsc-chit-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "kmbsc-chit",
+  storageBucket: "kmbsc-chit.appspot.com",
+  messagingSenderId: "511325458985",
+  appId: "1:511325458985:web:a7597bcf0f89b71405c238"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ✅ MEMBER
+function addMember(){
+  let name = document.getElementById("name").value;
+  let amount = document.getElementById("amount").value;
+
+  if(!name) return alert("Enter name");
+
+  db.ref("kmbsc/members").push({
+    name:name,
+    amount:Number(amount)
+  });
+
+  document.getElementById("name").value="";
+  document.getElementById("amount").value="";
+}
+
+// ✅ PAYMENT
+function addPayment(){
+  let name = document.getElementById("pname").value;
+  let amount = document.getElementById("pamount").value;
+
+  if(!name) return alert("Enter name");
+
+  db.ref("kmbsc/payments").push({
+    name:name,
+    amount:Number(amount),
+    date:new Date().toLocaleDateString()
+  });
+
+  document.getElementById("pname").value="";
+  document.getElementById("pamount").value="";
+}
+
+// ✅ LIVE MEMBERS
+db.ref("kmbsc/members").on("value", snap=>{
+  let html="";
+  snap.forEach(child=>{
+    let m = child.val();
+    html += `<div class="item">${m.name} - ₹${m.amount}</div>`;
+  });
+  document.getElementById("members").innerHTML = html;
+});
+
+// ✅ LIVE PAYMENTS
+db.ref("kmbsc/payments").on("value", snap=>{
+  let html="";
+  snap.forEach(child=>{
+    let p = child.val();
+    html += `<div class="item">${p.name} - ₹${p.amount} (${p.date})</div>`;
+  });
+  document.getElementById("payments").innerHTML = html;
+});
+
+</script>
+
+</body>
+</html><div class="card">
 <h3>Add Payment</h3>
 <input id="pname" placeholder="Member Name">
 <input id="pamount" placeholder="Amount">
