@@ -222,41 +222,48 @@ function formGroup(...fields) {
 
 // ── Login Screen ──────────────────────────────────────────────
 function renderLogin() {
-  const wrap = el("div",{style:{background:C.bg,minHeight:"100vh",padding:"0"}});
+  const wrap = el("div",{style:{background:C.bg,minHeight:"100vh"}});
 
-  // Fixed header
-  const header = el("div",{style:{background:C.card,borderBottom:`1px solid ${C.border}`,padding:"20px 20px 16px",textAlign:"center"}},
-    el("div",{style:{width:44,height:44,background:C.gold,borderRadius:10,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:22,marginBottom:8}},"🏛️"),
-    el("div",{style:{fontWeight:700,fontSize:20,color:C.gold}},"KMBSC"),
-    el("div",{style:{fontSize:11,color:C.muted,marginTop:2}},"Kovil Mutual Benefit Savings Chit")
-  );
+  const box = el("div",{style:{padding:"30px 16px",maxWidth:400,margin:"0 auto"}});
 
-  // Form — always at top, no centering
-  const form = el("div",{style:{padding:"20px 16px",display:"flex",flexDirection:"column",gap:14,maxWidth:400,margin:"0 auto"}});
+  box.appendChild(el("div",{style:{textAlign:"center",marginBottom:28}},
+    el("div",{style:{width:54,height:54,background:C.gold,borderRadius:12,display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:26,marginBottom:10}},"🏛️"),
+    el("div",{style:{fontWeight:700,fontSize:24,color:C.gold}},"KMBSC"),
+    el("div",{style:{fontSize:12,color:C.muted,marginTop:4}},"Kovil Mutual Benefit Savings Chit")
+  ));
 
-  const emailLabel = el("div",{style:{fontSize:13,color:C.muted,marginBottom:4,fontWeight:600}},"📧 Email");
-  const emailInput = el("input",{type:"email",placeholder:"your@gmail.com",value:state.loginEmail||"",style:{fontSize:16,padding:"14px",borderRadius:10}});
-  emailInput.addEventListener("input",e=>setState({loginEmail:e.target.value}));
+  // Use id-based inputs — no re-render on type!
+  const emailIn = el("input",{id:"login-email",type:"email",placeholder:"Email address",autocomplete:"email",style:{marginBottom:12,fontSize:16,padding:"14px"}});
+  const passIn = el("input",{id:"login-pass",type:"password",placeholder:"Password",autocomplete:"current-password",style:{marginBottom:12,fontSize:16,padding:"14px"}});
+  
+  const errDiv = el("div",{id:"login-err",style:{color:C.red,fontSize:13,textAlign:"center",padding:"8px",background:"#2d1515",borderRadius:8,marginBottom:12,display:"none"}});
 
-  const passLabel = el("div",{style:{fontSize:13,color:C.muted,marginBottom:4,fontWeight:600}},"🔑 Password");
-  const passInput = el("input",{type:"password",placeholder:"Enter password",value:state.loginPassword||"",style:{fontSize:16,padding:"14px",borderRadius:10}});
-  passInput.addEventListener("input",e=>setState({loginPassword:e.target.value}));
-  passInput.addEventListener("keydown",e=>{ if(e.key==="Enter") login(); });
+  const loginBtn = el("button",{style:{background:C.gold,color:"#000",fontWeight:700,padding:"16px",fontSize:16,borderRadius:12,width:"100%"}},"🔐 Login");
 
-  const loginBtn = el("button",{
-    onClick:login,
-    style:{background:C.gold,color:"#000",fontWeight:700,padding:"16px",fontSize:16,borderRadius:12,marginTop:4,opacity:state.authLoading?0.6:1}
-  }, state.authLoading ? "Logging in..." : "🔐 Login");
+  loginBtn.addEventListener("click", async()=>{
+    const email = document.getElementById("login-email").value.trim();
+    const pass = document.getElementById("login-pass").value;
+    const err = document.getElementById("login-err");
+    if(!email||!pass){ err.textContent="Email & Password தேவை!"; err.style.display="block"; return; }
+    loginBtn.textContent="Logging in...";
+    loginBtn.style.opacity="0.6";
+    try {
+      await signInWithEmailAndPassword(auth, email, pass);
+    } catch(e) {
+      err.textContent="தவறான Email / Password";
+      err.style.display="block";
+      loginBtn.textContent="🔐 Login";
+      loginBtn.style.opacity="1";
+    }
+  });
 
-  form.appendChild(emailLabel);
-  form.appendChild(emailInput);
-  form.appendChild(passLabel);
-  form.appendChild(passInput);
-  if(state.loginError) form.appendChild(el("div",{style:{color:C.red,fontSize:13,textAlign:"center",padding:"8px",background:"#2d1515",borderRadius:8}},state.loginError));
-  form.appendChild(loginBtn);
+  passIn.addEventListener("keydown",e=>{ if(e.key==="Enter") loginBtn.click(); });
 
-  wrap.appendChild(header);
-  wrap.appendChild(form);
+  box.appendChild(emailIn);
+  box.appendChild(passIn);
+  box.appendChild(errDiv);
+  box.appendChild(loginBtn);
+  wrap.appendChild(box);
   return wrap;
 }
 
