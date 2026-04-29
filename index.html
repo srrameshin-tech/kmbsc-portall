@@ -153,8 +153,24 @@ function Login({groups, onMemberLogin}) {
 function MemberView({group, members, payments, onLogout}) {
   const tm = curM();
   const gMembers = members.filter(m=>m.groupId===group.id);
+
+  const generateMonths=(startMonth)=>{
+    if(!startMonth) return [tm];
+    const months=[];
+    const [sy,sm]=startMonth.split("-").map(Number);
+    const now=new Date();
+    const ey=now.getFullYear(), em=now.getMonth()+1;
+    let y=sy,m=sm;
+    while(y<ey||(y===ey&&m<=em)){
+      months.push(`${MO[m-1]} ${y}`);
+      m++;if(m>12){m=1;y++;}
+      if(months.length>60) break;
+    }
+    return months;
+  };
+
+  const allMonths=generateMonths(group.startMonth);
   const [filterMonth, setFilterMonth] = useState(tm);
-  const allMonths = [...new Set([tm,...payments.map(p=>p.month)])];
 
   const monthPayments = payments.filter(p=>p.month===filterMonth);
   const paidIds = monthPayments.filter(p=>p.status==="Paid").map(p=>p.memberId);
@@ -258,7 +274,7 @@ function MemberView({group, members, payments, onLogout}) {
 function Groups({groups,setGroups,showToast}) {
   const [showForm,setShowForm]=useState(false);
   const [editG,setEditG]=useState(null);
-  const blank={name:"",chitAmount:"",password:"",description:""};
+  const blank={name:"",chitAmount:"",password:"",description:"",startMonth:""};
   const [form,setForm]=useState(blank);
   const [showPass, setShowPass]=useState({});
 
@@ -317,6 +333,10 @@ function Groups({groups,setGroups,showToast}) {
               <span style={{color:C.muted}}>Chit Amount</span>
               <span className="mono" style={{color:C.gold,fontWeight:700}}>{fmt(g.chitAmount)}</span>
             </div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:8}}>
+              <span style={{color:C.muted}}>📅 Start Month</span>
+              <span style={{color:C.blue,fontWeight:600}}>{g.startMonth?`${MO[Number(g.startMonth.split("-")[1])-1]} ${g.startMonth.split("-")[0]}`:"Not set"}</span>
+            </div>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:13,marginBottom:12,background:"#12151f",padding:"8px 12px",borderRadius:8}}>
               <span style={{color:C.muted}}>🔑 Password</span>
               <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -329,7 +349,7 @@ function Groups({groups,setGroups,showToast}) {
               </div>
             </div>
             <div style={{display:"flex",gap:8}}>
-              <button onClick={()=>{setEditG(g);setForm({name:g.name,chitAmount:g.chitAmount||"",password:g.password||"",description:g.description||""});setShowForm(true);}} style={{flex:1,background:"#1e293b",color:C.blue,padding:"8px 0",fontSize:13}}>✏️ Edit</button>
+              <button onClick={()=>{setEditG(g);setForm({name:g.name,chitAmount:g.chitAmount||"",password:g.password||"",description:g.description||"",startMonth:g.startMonth||""});setShowForm(true);}} style={{flex:1,background:"#1e293b",color:C.blue,padding:"8px 0",fontSize:13}}>✏️ Edit</button>
               <button onClick={()=>del(g.id)} style={{flex:1,background:"#1e293b",color:C.red,padding:"8px 0",fontSize:13}}>🗑️ Delete</button>
             </div>
           </div>
@@ -342,6 +362,8 @@ function Groups({groups,setGroups,showToast}) {
             <input placeholder="Group Name * (e.g. Group 1)" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
             <input type="number" placeholder="Chit Amount (₹)" value={form.chitAmount} onChange={e=>setForm(f=>({...f,chitAmount:e.target.value}))}/>
             <input placeholder="Member Password * (e.g. group1@2026)" value={form.password} onChange={e=>setForm(f=>({...f,password:e.target.value}))}/>
+            <div style={{fontSize:12,color:C.muted,marginBottom:-4}}>📅 Chit Start Month</div>
+            <input type="month" value={form.startMonth} onChange={e=>setForm(f=>({...f,startMonth:e.target.value}))}/>
             <input placeholder="Description (optional)" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))}/>
             <div style={{background:"#1a2535",border:"1px solid #1e3a5f",borderRadius:8,padding:10,fontSize:12,color:C.blue}}>
               💡 Members இந்த password use பண்ணி login பண்ணுவாங்க
@@ -494,12 +516,35 @@ function Payments({members,payments,setPayments,groups,showToast}) {
   const tm=curM();
   const [filterMonth,setFilterMonth]=useState(tm);
   const [filterGroup,setFilterGroup]=useState("all");
-  // Only show months with actual payments + current month
-  const allMonths=[...new Set([tm,...payments.filter(p=>p.month).map(p=>p.month)])];
   const [showForm,setShowForm]=useState(false);
   const [editPay,setEditPay]=useState(null);
   const blank={memberId:"",month:tm,amount:"",date:toStr(),status:"Paid",notes:""};
   const [form,setForm]=useState(blank);
+
+  // Generate months from group start month to current month
+  const generateMonths=(startMonth)=>{
+    if(!startMonth) return [tm];
+    const months=[];
+    const [sy,sm]=startMonth.split("-").map(Number);
+    const now=new Date();
+    const ey=now.getFullYear(), em=now.getMonth()+1;
+    let y=sy,m=sm;
+    while(y<ey||(y===ey&&m<=em)){
+      months.push(`${MO[m-1]} ${y}`);
+      m++;if(m>12){m=1;y++;}
+      if(months.length>60) break;
+    }
+    return months;
+  };
+
+  // Get start month based on selected group
+  const selectedGroup=filterGroup==="all"?null:groups.find(g=>g.id===filterGroup);
+  const groupStartMonth=selectedGroup?.startMonth||null;
+
+  // If group selected use its months, else use all payment months + current
+  const allMonths=filterGroup==="all"
+    ?[...new Set([tm,...payments.filter(p=>p.month).map(p=>p.month)])]
+    :generateMonths(groupStartMonth);
 
   const filteredMembers=filterGroup==="all"?members:members.filter(m=>m.groupId===filterGroup);
   const filteredPayments=payments.filter(p=>{
