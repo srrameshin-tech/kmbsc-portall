@@ -492,9 +492,10 @@ function Members({members,setMembers,payments,groups,showToast}) {
 // ── Payments Tab (Admin) ──────────────────────────────────────
 function Payments({members,payments,setPayments,groups,showToast}) {
   const tm=curM();
-  const allMonths=[...new Set([tm,...payments.map(p=>p.month)])];
   const [filterMonth,setFilterMonth]=useState(tm);
   const [filterGroup,setFilterGroup]=useState("all");
+  // Only show months with actual payments + current month
+  const allMonths=[...new Set([tm,...payments.filter(p=>p.month).map(p=>p.month)])];
   const [showForm,setShowForm]=useState(false);
   const [editPay,setEditPay]=useState(null);
   const blank={memberId:"",month:tm,amount:"",date:toStr(),status:"Paid",notes:""};
