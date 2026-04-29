@@ -10,7 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700&display=swap" rel="stylesheet"/>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
-body{background:#0f1117;color:#e2e8f0;font-family:'Sora',sans-serif;-webkit-text-size-adjust:none;text-size-adjust:none;min-width:320px;overflow-x:hidden;}
+body{background:#0f1117;color:#e2e8f0;font-family:'Sora',sans-serif;-webkit-text-size-adjust:none;text-size-adjust:none;overflow-x:hidden;}
 input,select,textarea{background:#12151f;border:1px solid #2a2d3e;color:#e2e8f0;border-radius:10px;padding:13px 14px;font-size:16px;width:100%;outline:none;font-family:'Sora',sans-serif;-webkit-appearance:none;}
 input:focus,select:focus,textarea:focus{border-color:#f5c842;}
 button{cursor:pointer;font-family:'Sora',sans-serif;border:none;border-radius:10px;-webkit-tap-highlight-color:transparent;}
@@ -29,7 +29,7 @@ textarea{resize:vertical;font-size:15px;}
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-app.js";
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-auth.js";
-import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
+import { getFirestore, collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where } from "https://www.gstatic.com/firebasejs/12.12.1/firebase-firestore.js";
 
 const app = initializeApp({
   apiKey: "AIzaSyBVGVu59jDZybPFAX_pRisSrQRoXHQ0EWY",
@@ -43,14 +43,14 @@ const app = initializeApp({
 window.__fb = {
   auth: getAuth(app), db: getFirestore(app),
   signInWithEmailAndPassword, signOut, onAuthStateChanged,
-  collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy
+  collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, orderBy, where
 };
 window.dispatchEvent(new Event('fbready'));
 </script>
 
 <script type="text/babel">
 const { useState, useEffect, useRef } = React;
-const C = { bg:"#0f1117", card:"#1a1d27", border:"#2a2d3e", gold:"#f5c842", green:"#22c55e", red:"#ef4444", blue:"#60a5fa", muted:"#64748b" };
+const C = { bg:"#0f1117", card:"#1a1d27", border:"#2a2d3e", gold:"#f5c842", green:"#22c55e", red:"#ef4444", blue:"#60a5fa", muted:"#64748b", purple:"#a78bfa" };
 const MO = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 const curM = () => { const d=new Date(); return `${MO[d.getMonth()]} ${d.getFullYear()}`; };
 const fmt = n => "₹"+Number(n||0).toLocaleString("en-IN");
@@ -65,7 +65,7 @@ function Badge({s}) {
 function Modal({title,onClose,children}) {
   return (
     <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.8)",zIndex:200,overflowY:"auto",padding:"12px"}} onClick={onClose}>
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20,width:"100%",maxWidth:420,margin:"0 auto",marginTop:10}} onClick={e=>e.stopPropagation()}>
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:16,padding:20,width:"100%",maxWidth:440,margin:"10px auto"}} onClick={e=>e.stopPropagation()}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
           <b style={{fontSize:16}}>{title}</b>
           <button onClick={onClose} style={{background:"none",color:C.muted,fontSize:24,lineHeight:1,padding:"0 4px"}}>✕</button>
@@ -76,16 +76,15 @@ function Modal({title,onClose,children}) {
   );
 }
 
-// ── Login — uses refs, NO re-render on type ───────────────────
 function Login() {
-  const eRef = useRef(); const pRef = useRef();
-  const [err,setErr] = useState(""); const [busy,setBusy] = useState(false);
-  const go = async() => {
-    const e=eRef.current.value.trim(), p=pRef.current.value;
+  const eRef=useRef(); const pRef=useRef();
+  const [err,setErr]=useState(""); const [busy,setBusy]=useState(false);
+  const go=async()=>{
+    const e=eRef.current.value.trim(),p=pRef.current.value;
     if(!e||!p){setErr("Email & Password தேவை!");return;}
-    setBusy(true); setErr("");
-    try{ await window.__fb.signInWithEmailAndPassword(window.__fb.auth,e,p); }
-    catch{ setErr("தவறான Email / Password"); setBusy(false); }
+    setBusy(true);setErr("");
+    try{await window.__fb.signInWithEmailAndPassword(window.__fb.auth,e,p);}
+    catch{setErr("தவறான Email / Password");setBusy(false);}
   };
   return (
     <div style={{minHeight:"100vh",background:C.bg,padding:"50px 16px 20px"}}>
@@ -108,75 +107,108 @@ function Login() {
   );
 }
 
-// ── Dashboard ─────────────────────────────────────────────────
-function Dashboard({members,payments}) {
-  const tm=curM();
-  const totalChit=members.reduce((s,m)=>s+Number(m.chitAmount||0),0);
-  const paidNow=payments.filter(p=>p.month===tm&&p.status==="Paid").length;
-  const totalCol=payments.filter(p=>p.status==="Paid").reduce((s,p)=>s+Number(p.amount||0),0);
-  const pct=members.length>0?Math.round(paidNow/members.length*100):0;
-  const cards=[
-    {i:"👥",l:"Members",v:members.length,c:C.blue},
-    {i:"💰",l:"Total Chit",v:fmt(totalChit),c:C.gold},
-    {i:"✅",l:"Paid",v:paidNow,c:C.green},
-    {i:"⏳",l:"Pending",v:members.length-paidNow,c:"#fb923c"},
-    {i:"🏦",l:"Collected",v:fmt(totalCol),c:C.gold},
-    {i:"📅",l:"Month",v:tm.split(" ")[0],c:C.muted},
-  ];
+// ── Groups Tab ────────────────────────────────────────────────
+function Groups({groups,setGroups,showToast}) {
+  const [showForm,setShowForm]=useState(false);
+  const [editG,setEditG]=useState(null);
+  const blank={name:"",chitAmount:"",description:""};
+  const [form,setForm]=useState(blank);
+
+  const save=async()=>{
+    if(!form.name.trim()) return alert("Group name தேவை!");
+    const fb=window.__fb;
+    try{
+      if(editG){
+        await fb.updateDoc(fb.doc(fb.db,"groups",editG.id),form);
+        setGroups(p=>p.map(g=>g.id===editG.id?{...g,...form}:g));
+        showToast("Group updated!");
+      } else {
+        const r=await fb.addDoc(fb.collection(fb.db,"groups"),{...form,createdAt:toStr()});
+        setGroups(p=>[...p,{id:r.id,...form,createdAt:toStr()}]);
+        showToast("Group added!");
+      }
+      setShowForm(false);setEditG(null);setForm(blank);
+    }catch{showToast("Error","err");}
+  };
+
+  const del=async(id)=>{
+    if(!confirm("Delete this group?")) return;
+    try{
+      await window.__fb.deleteDoc(window.__fb.doc(window.__fb.db,"groups",id));
+      setGroups(p=>p.filter(g=>g.id!==id));
+      showToast("Deleted","err");
+    }catch{showToast("Error","err");}
+  };
+
   return (
     <div style={{animation:"fadeIn .3s ease"}}>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
-        {cards.map(x=>(
-          <div key={x.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
-            <div style={{fontSize:20,marginBottom:5}}>{x.i}</div>
-            <div className="mono" style={{fontSize:20,fontWeight:700,color:x.c}}>{x.v}</div>
-            <div style={{fontSize:11,color:C.muted,marginTop:3}}>{x.l}</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+        <b style={{fontSize:18}}>Groups ({groups.length})</b>
+        <button onClick={()=>{setForm(blank);setEditG(null);setShowForm(true);}} style={{background:C.gold,color:"#000",fontWeight:700,padding:"9px 16px",fontSize:13}}>+ New Group</button>
+      </div>
+
+      {groups.length===0 && (
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:30,textAlign:"center",color:C.muted}}>
+          <div style={{fontSize:32,marginBottom:8}}>👥</div>
+          <div>No groups yet — Create your first group!</div>
+        </div>
+      )}
+
+      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+        {groups.map((g,i)=>(
+          <div key={g.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:10}}>
+                <div style={{width:36,height:36,background:C.gold,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,color:"#000",fontSize:14}}>{i+1}</div>
+                <div>
+                  <div style={{fontWeight:700,fontSize:16}}>{g.name}</div>
+                  {g.description&&<div style={{fontSize:12,color:C.muted}}>{g.description}</div>}
+                </div>
+              </div>
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:12}}>
+              <span style={{color:C.muted}}>Chit Amount</span>
+              <span className="mono" style={{color:C.gold,fontWeight:700}}>{fmt(g.chitAmount)}</span>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button onClick={()=>{setEditG(g);setForm({name:g.name,chitAmount:g.chitAmount,description:g.description||""});setShowForm(true);}} style={{flex:1,background:"#1e293b",color:C.blue,padding:"8px 0",fontSize:13}}>✏️ Edit</button>
+              <button onClick={()=>del(g.id)} style={{flex:1,background:"#1e293b",color:C.red,padding:"8px 0",fontSize:13}}>🗑️ Delete</button>
+            </div>
           </div>
         ))}
       </div>
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14,marginBottom:14}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-          <span style={{fontWeight:600,fontSize:13}}>{tm} Collection</span>
-          <span className="mono" style={{color:C.gold,fontWeight:700}}>{pct}%</span>
-        </div>
-        <div style={{background:"#1e293b",borderRadius:99,height:10}}>
-          <div style={{background:`linear-gradient(90deg,${C.gold},#f97316)`,borderRadius:99,height:10,width:`${pct}%`,transition:"width .5s"}}/>
-        </div>
-        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginTop:5}}>
-          <span>{paidNow} paid</span><span>{members.length-paidNow} pending</span>
-        </div>
-      </div>
-      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
-        <b style={{fontSize:14,display:"block",marginBottom:10}}>Recent Payments</b>
-        {payments.slice(0,5).length===0
-          ?<div style={{color:C.muted,textAlign:"center",padding:20,fontSize:13}}>No payments yet</div>
-          :payments.slice(0,5).map(p=>(
-            <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
-              <div>
-                <div style={{fontWeight:600,fontSize:14}}>{p.memberName}</div>
-                <div style={{fontSize:11,color:C.muted}}>{p.month} · {p.date}</div>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div className="mono" style={{color:C.green,fontWeight:700}}>{fmt(p.amount)}</div>
-                <Badge s={p.status}/>
-              </div>
-            </div>
-          ))
-        }
-      </div>
+
+      {showForm&&(
+        <Modal title={editG?"Edit Group":"New Group"} onClose={()=>{setShowForm(false);setEditG(null);}}>
+          <div style={{display:"flex",flexDirection:"column",gap:11}}>
+            <input placeholder="Group Name * (e.g. Group 1)" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
+            <input type="number" placeholder="Chit Amount (₹)" value={form.chitAmount} onChange={e=>setForm(f=>({...f,chitAmount:e.target.value}))}/>
+            <input placeholder="Description (optional)" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))}/>
+            <button onClick={save} style={{background:C.gold,color:"#000",fontWeight:700,padding:13,fontSize:15}}>{editG?"Update Group":"Create Group"}</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
 
-// ── Members ───────────────────────────────────────────────────
-function Members({members,setMembers,payments,showToast}) {
+// ── Members Tab ───────────────────────────────────────────────
+function Members({members,setMembers,payments,groups,showToast}) {
   const [search,setSearch]=useState("");
-  const [mode,setMode]=useState(null); // null|add|edit|detail
+  const [filterGroup,setFilterGroup]=useState("all");
+  const [mode,setMode]=useState(null);
   const [sel,setSel]=useState(null);
-  const blank={name:"",phone:"",chitAmount:"",joinDate:"",status:"Active",notes:""};
+  const blank={name:"",phone:"",chitAmount:"",joinDate:"",status:"Active",notes:"",groupId:""};
   const [form,setForm]=useState(blank);
-  const filtered=members.filter(m=>m.name.toLowerCase().includes(search.toLowerCase())||m.phone.includes(search));
+
+  const filtered=members.filter(m=>{
+    const matchSearch=m.name.toLowerCase().includes(search.toLowerCase())||m.phone.includes(search);
+    const matchGroup=filterGroup==="all"||m.groupId===filterGroup;
+    return matchSearch&&matchGroup;
+  });
+
   const mPay=id=>payments.filter(p=>p.memberId===id);
+  const getGroupName=id=>groups.find(g=>g.id===id)?.name||"No Group";
 
   const save=async()=>{
     if(!form.name.trim()||!form.phone.trim()) return alert("Name & Phone required!");
@@ -192,7 +224,7 @@ function Members({members,setMembers,payments,showToast}) {
         showToast("Member added!");
       }
       setMode(null);
-    } catch{showToast("Error","err");}
+    }catch{showToast("Error","err");}
   };
 
   const del=async(id,e)=>{
@@ -208,22 +240,33 @@ function Members({members,setMembers,payments,showToast}) {
   return (
     <div style={{animation:"fadeIn .3s ease"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-        <b style={{fontSize:18}}>Members ({members.length})</b>
+        <b style={{fontSize:18}}>Members ({filtered.length})</b>
         <button onClick={()=>{setForm(blank);setMode("add");}} style={{background:C.gold,color:"#000",fontWeight:700,padding:"9px 16px",fontSize:13}}>+ Add</button>
       </div>
+
+      {/* Group filter */}
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        <button onClick={()=>setFilterGroup("all")} style={{padding:"6px 14px",background:filterGroup==="all"?C.gold:C.card,color:filterGroup==="all"?"#000":C.muted,border:`1px solid ${filterGroup==="all"?C.gold:C.border}`,fontWeight:filterGroup==="all"?700:400,fontSize:12}}>All</button>
+        {groups.map(g=>(
+          <button key={g.id} onClick={()=>setFilterGroup(g.id)} style={{padding:"6px 14px",background:filterGroup===g.id?C.gold:C.card,color:filterGroup===g.id?"#000":C.muted,border:`1px solid ${filterGroup===g.id?C.gold:C.border}`,fontWeight:filterGroup===g.id?700:400,fontSize:12}}>{g.name}</button>
+        ))}
+      </div>
+
       <input placeholder="🔍 Search..." value={search} onChange={e=>setSearch(e.target.value)} style={{marginBottom:14}}/>
+
       <div style={{display:"flex",flexDirection:"column",gap:12}}>
         {filtered.map(m=>{
           const paid=mPay(m.id).filter(p=>p.status==="Paid").length;
           return(
             <div key={m.id} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:16}} onClick={()=>{setSel(m);setMode("detail");}}>
-              <div style={{display:"flex",justifyContent:"space-between",marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
                 <div>
                   <div style={{fontWeight:700,fontSize:15}}>{m.name}</div>
                   <div style={{fontSize:12,color:C.muted}}>{m.phone}</div>
                 </div>
                 <Badge s={m.status}/>
               </div>
+              <div style={{display:"inline-block",background:"#1e293b",color:C.purple,padding:"2px 10px",borderRadius:20,fontSize:11,marginBottom:8}}>{getGroupName(m.groupId)}</div>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:13,marginBottom:4}}>
                 <span style={{color:C.muted}}>Chit Amount</span>
                 <span className="mono" style={{color:C.gold,fontWeight:700}}>{fmt(m.chitAmount)}</span>
@@ -233,7 +276,7 @@ function Members({members,setMembers,payments,showToast}) {
                 <span className="mono" style={{color:C.green}}>{paid}</span>
               </div>
               <div style={{display:"flex",gap:8}} onClick={e=>e.stopPropagation()}>
-                <button onClick={e=>{e.stopPropagation();setSel(m);setForm({...m});setMode("edit");}} style={{flex:1,background:"#1e293b",color:C.blue,padding:"9px 0",fontSize:13}}>✏️ Edit</button>
+                <button onClick={e=>{e.stopPropagation();setSel(m);setForm({name:m.name,phone:m.phone,chitAmount:m.chitAmount,joinDate:m.joinDate||"",status:m.status,notes:m.notes||"",groupId:m.groupId||""});setMode("edit");}} style={{flex:1,background:"#1e293b",color:C.blue,padding:"9px 0",fontSize:13}}>✏️ Edit</button>
                 <button onClick={e=>del(m.id,e)} style={{flex:1,background:"#1e293b",color:C.red,padding:"9px 0",fontSize:13}}>🗑️ Delete</button>
               </div>
             </div>
@@ -248,6 +291,10 @@ function Members({members,setMembers,payments,showToast}) {
             <input placeholder="Full Name *" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/>
             <input placeholder="Phone *" value={form.phone} onChange={e=>setForm(f=>({...f,phone:e.target.value}))}/>
             <input type="number" placeholder="Chit Amount (₹)" value={form.chitAmount} onChange={e=>setForm(f=>({...f,chitAmount:e.target.value}))}/>
+            <select value={form.groupId} onChange={e=>setForm(f=>({...f,groupId:e.target.value}))}>
+              <option value="">Select Group</option>
+              {groups.map(g=><option key={g.id} value={g.id}>{g.name}</option>)}
+            </select>
             <input type="date" value={form.joinDate} onChange={e=>setForm(f=>({...f,joinDate:e.target.value}))}/>
             <select value={form.status} onChange={e=>setForm(f=>({...f,status:e.target.value}))}><option>Active</option><option>Inactive</option></select>
             <textarea rows={2} placeholder="Notes" value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}/>
@@ -258,7 +305,7 @@ function Members({members,setMembers,payments,showToast}) {
 
       {mode==="detail"&&sel&&(
         <Modal title={sel.name} onClose={()=>setMode(null)}>
-          {[["📞",sel.phone],["💰",fmt(sel.chitAmount)],["📅",sel.joinDate||"-"],["📝",sel.notes||"-"]].map(([k,v])=>(
+          {[["👥 Group",getGroupName(sel.groupId)],["📞 Phone",sel.phone],["💰 Chit",fmt(sel.chitAmount)],["📅 Join",sel.joinDate||"-"],["📝 Notes",sel.notes||"-"]].map(([k,v])=>(
             <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
               <span style={{color:C.muted,fontSize:13}}>{k}</span>
               <span style={{fontWeight:600,fontSize:13}}>{v}</span>
@@ -281,21 +328,30 @@ function Members({members,setMembers,payments,showToast}) {
   );
 }
 
-// ── Payments ──────────────────────────────────────────────────
-function Payments({members,payments,setPayments,showToast}) {
+// ── Payments Tab ──────────────────────────────────────────────
+function Payments({members,payments,setPayments,groups,showToast}) {
   const tm=curM();
   const [fm,setFm]=useState(tm);
+  const [filterGroup,setFilterGroup]=useState("all");
   const [showForm,setShowForm]=useState(false);
   const blank={memberId:"",month:tm,amount:"",date:toStr(),status:"Paid",notes:""};
   const [form,setForm]=useState(blank);
+
   const allM=[...new Set([tm,...payments.map(p=>p.month)])];
-  const filtered=payments.filter(p=>p.month===fm);
-  const paidIds=filtered.filter(p=>p.status==="Paid").map(p=>p.memberId);
-  const pend=members.filter(m=>!paidIds.includes(m.id));
+
+  const filteredMembers=filterGroup==="all"?members:members.filter(m=>m.groupId===filterGroup);
+  const filteredPayments=payments.filter(p=>{
+    const monthMatch=p.month===fm;
+    const groupMatch=filterGroup==="all"||filteredMembers.some(m=>m.id===p.memberId);
+    return monthMatch&&groupMatch;
+  });
+
+  const paidIds=filteredPayments.filter(p=>p.status==="Paid").map(p=>p.memberId);
+  const pend=filteredMembers.filter(m=>!paidIds.includes(m.id));
   const getM=id=>members.find(m=>m.id===id);
 
   const addPay=async()=>{
-    if(!form.memberId)return alert("Select member!");
+    if(!form.memberId) return alert("Select member!");
     const m=getM(form.memberId);
     const data={...form,memberName:m?.name||"-",amount:form.amount||m?.chitAmount||0};
     const fb=window.__fb;
@@ -322,13 +378,22 @@ function Payments({members,payments,setPayments,showToast}) {
         <b style={{fontSize:18}}>Payments</b>
         <button onClick={()=>setShowForm(true)} style={{background:C.gold,color:"#000",fontWeight:700,padding:"9px 16px",fontSize:13}}>+ Record</button>
       </div>
-      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-        {allM.map(m=>(
-          <button key={m} onClick={()=>setFm(m)} style={{padding:"6px 14px",background:m===fm?C.gold:C.card,color:m===fm?"#000":C.muted,border:`1px solid ${m===fm?C.gold:C.border}`,fontWeight:m===fm?700:400,fontSize:12}}>
-            {m}
-          </button>
+
+      {/* Group filter */}
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        <button onClick={()=>setFilterGroup("all")} style={{padding:"6px 14px",background:filterGroup==="all"?C.gold:C.card,color:filterGroup==="all"?"#000":C.muted,border:`1px solid ${filterGroup==="all"?C.gold:C.border}`,fontWeight:filterGroup==="all"?700:400,fontSize:12}}>All Groups</button>
+        {groups.map(g=>(
+          <button key={g.id} onClick={()=>setFilterGroup(g.id)} style={{padding:"6px 14px",background:filterGroup===g.id?C.gold:C.card,color:filterGroup===g.id?"#000":C.muted,border:`1px solid ${filterGroup===g.id?C.gold:C.border}`,fontWeight:filterGroup===g.id?700:400,fontSize:12}}>{g.name}</button>
         ))}
       </div>
+
+      {/* Month filter */}
+      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+        {allM.map(m=>(
+          <button key={m} onClick={()=>setFm(m)} style={{padding:"6px 14px",background:m===fm?C.blue:C.card,color:m===fm?"#fff":C.muted,border:`1px solid ${m===fm?C.blue:C.border}`,fontWeight:m===fm?700:400,fontSize:12}}>{m}</button>
+        ))}
+      </div>
+
       {pend.length>0&&(
         <div style={{background:"#1c1208",border:"1px solid #92400e",borderRadius:12,padding:12,marginBottom:12}}>
           <div style={{fontWeight:700,color:"#fb923c",fontSize:13,marginBottom:6}}>⏳ Pending ({pend.length})</div>
@@ -337,10 +402,11 @@ function Payments({members,payments,setPayments,showToast}) {
           </div>
         </div>
       )}
+
       <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,overflow:"hidden"}}>
-        {filtered.length===0
+        {filteredPayments.length===0
           ?<div style={{textAlign:"center",padding:36,color:C.muted,fontSize:13}}>No payments for {fm}</div>
-          :filtered.map(p=>(
+          :filteredPayments.map(p=>(
             <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"12px 14px",borderBottom:`1px solid ${C.border}`}}>
               <div style={{flex:1,minWidth:0}}>
                 <div style={{fontWeight:600,fontSize:14}}>{p.memberName}</div>
@@ -355,12 +421,18 @@ function Payments({members,payments,setPayments,showToast}) {
           ))
         }
       </div>
+
       {showForm&&(
         <Modal title="Record Payment" onClose={()=>setShowForm(false)}>
           <div style={{display:"flex",flexDirection:"column",gap:11}}>
             <select value={form.memberId} onChange={e=>{const m=getM(e.target.value);setForm(f=>({...f,memberId:e.target.value,amount:m?.chitAmount||""}));}}>
               <option value="">Select Member *</option>
-              {members.map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+              {groups.map(g=>(
+                <optgroup key={g.id} label={g.name}>
+                  {members.filter(m=>m.groupId===g.id).map(m=><option key={m.id} value={m.id}>{m.name}</option>)}
+                </optgroup>
+              ))}
+              {members.filter(m=>!m.groupId).map(m=><option key={m.id} value={m.id}>{m.name} (No Group)</option>)}
             </select>
             <input placeholder="Month (e.g. Apr 2026)" value={form.month} onChange={e=>setForm(f=>({...f,month:e.target.value}))}/>
             <input type="number" placeholder="Amount (₹)" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/>
@@ -375,12 +447,105 @@ function Payments({members,payments,setPayments,showToast}) {
   );
 }
 
+// ── Dashboard ─────────────────────────────────────────────────
+function Dashboard({members,payments,groups}) {
+  const tm=curM();
+  const totalChit=members.reduce((s,m)=>s+Number(m.chitAmount||0),0);
+  const paidNow=payments.filter(p=>p.month===tm&&p.status==="Paid").length;
+  const totalCol=payments.filter(p=>p.status==="Paid").reduce((s,p)=>s+Number(p.amount||0),0);
+  const pct=members.length>0?Math.round(paidNow/members.length*100):0;
+
+  return (
+    <div style={{animation:"fadeIn .3s ease"}}>
+      {/* Overall stats */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+        {[
+          {i:"👥",l:"Members",v:members.length,c:C.blue},
+          {i:"🗂️",l:"Groups",v:groups.length,c:C.purple},
+          {i:"💰",l:"Total Chit",v:fmt(totalChit),c:C.gold},
+          {i:"🏦",l:"Collected",v:fmt(totalCol),c:C.green},
+          {i:"✅",l:`Paid`,v:paidNow,c:C.green},
+          {i:"⏳",l:"Pending",v:members.length-paidNow,c:"#fb923c"},
+        ].map(x=>(
+          <div key={x.l} style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
+            <div style={{fontSize:20,marginBottom:5}}>{x.i}</div>
+            <div className="mono" style={{fontSize:20,fontWeight:700,color:x.c}}>{x.v}</div>
+            <div style={{fontSize:11,color:C.muted,marginTop:3}}>{x.l}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Collection progress */}
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14,marginBottom:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+          <span style={{fontWeight:600,fontSize:13}}>{tm} Collection</span>
+          <span className="mono" style={{color:C.gold,fontWeight:700}}>{pct}%</span>
+        </div>
+        <div style={{background:"#1e293b",borderRadius:99,height:10}}>
+          <div style={{background:`linear-gradient(90deg,${C.gold},#f97316)`,borderRadius:99,height:10,width:`${pct}%`,transition:"width .5s"}}/>
+        </div>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginTop:5}}>
+          <span>{paidNow} paid</span><span>{members.length-paidNow} pending</span>
+        </div>
+      </div>
+
+      {/* Group-wise summary */}
+      {groups.length>0&&(
+        <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14,marginBottom:14}}>
+          <b style={{fontSize:14,display:"block",marginBottom:12}}>Group Summary</b>
+          {groups.map(g=>{
+            const gMembers=members.filter(m=>m.groupId===g.id);
+            const gPaid=payments.filter(p=>p.month===tm&&p.status==="Paid"&&gMembers.some(m=>m.id===p.memberId)).length;
+            const gPct=gMembers.length>0?Math.round(gPaid/gMembers.length*100):0;
+            return(
+              <div key={g.id} style={{marginBottom:12,paddingBottom:12,borderBottom:`1px solid ${C.border}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                  <span style={{fontWeight:600,fontSize:13}}>{g.name}</span>
+                  <span style={{fontSize:12,color:C.muted}}>{gMembers.length} members · {gPct}%</span>
+                </div>
+                <div style={{background:"#1e293b",borderRadius:99,height:6}}>
+                  <div style={{background:C.gold,borderRadius:99,height:6,width:`${gPct}%`,transition:"width .5s"}}/>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",fontSize:11,color:C.muted,marginTop:4}}>
+                  <span>{gPaid} paid</span>
+                  <span>{gMembers.length-gPaid} pending</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Recent payments */}
+      <div style={{background:C.card,border:`1px solid ${C.border}`,borderRadius:14,padding:14}}>
+        <b style={{fontSize:14,display:"block",marginBottom:10}}>Recent Payments</b>
+        {payments.slice(0,5).length===0
+          ?<div style={{color:C.muted,textAlign:"center",padding:20,fontSize:13}}>No payments yet</div>
+          :payments.slice(0,5).map(p=>(
+            <div key={p.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"9px 0",borderBottom:`1px solid ${C.border}`}}>
+              <div>
+                <div style={{fontWeight:600,fontSize:14}}>{p.memberName}</div>
+                <div style={{fontSize:11,color:C.muted}}>{p.month} · {p.date}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div className="mono" style={{color:C.green,fontWeight:700}}>{fmt(p.amount)}</div>
+                <Badge s={p.status}/>
+              </div>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────
 function App() {
   const [ready,setReady]=useState(!!window.__fb);
   const [user,setUser]=useState(null);
   const [loading,setLoading]=useState(true);
   const [tab,setTab]=useState("dashboard");
+  const [groups,setGroups]=useState([]);
   const [members,setMembers]=useState([]);
   const [payments,setPayments]=useState([]);
   const [toast,setToast]=useState(null);
@@ -389,17 +554,19 @@ function App() {
     const init=()=>{
       setReady(true);
       const fb=window.__fb;
-      fb.onAuthStateChanged(fb.auth, async u=>{
+      fb.onAuthStateChanged(fb.auth,async u=>{
         setUser(u);
         if(u){
           try{
-            const [ms,ps]=await Promise.all([
+            const [gs,ms,ps]=await Promise.all([
+              fb.getDocs(fb.query(fb.collection(fb.db,"groups"),fb.orderBy("name"))),
               fb.getDocs(fb.query(fb.collection(fb.db,"members"),fb.orderBy("name"))),
               fb.getDocs(fb.query(fb.collection(fb.db,"payments"),fb.orderBy("date","desc")))
             ]);
+            setGroups(gs.docs.map(d=>({id:d.id,...d.data()})));
             setMembers(ms.docs.map(d=>({id:d.id,...d.data()})));
             setPayments(ps.docs.map(d=>({id:d.id,...d.data()})));
-          }catch{}
+          }catch(e){console.error(e);}
         }
         setLoading(false);
       });
@@ -422,6 +589,13 @@ function App() {
 
   if(!user) return <Login/>;
 
+  const navItems=[
+    ["dashboard","📊","Dashboard"],
+    ["groups","🗂️","Groups"],
+    ["members","👥","Members"],
+    ["payments","💳","Payments"]
+  ];
+
   return (
     <div style={{minHeight:"100vh",background:C.bg}}>
       {toast&&(
@@ -429,6 +603,7 @@ function App() {
           {toast.type==="ok"?"✅ ":"❌ "}{toast.msg}
         </div>
       )}
+      {/* Header */}
       <div style={{background:C.card,borderBottom:`1px solid ${C.border}`,padding:"0 14px",display:"flex",alignItems:"center",justifyContent:"space-between",height:52}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:30,height:30,background:C.gold,borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>🏛️</div>
@@ -439,17 +614,20 @@ function App() {
         </div>
         <button onClick={()=>window.__fb.signOut(window.__fb.auth)} style={{background:"#1e293b",color:C.red,fontSize:12,padding:"6px 12px"}}>Logout</button>
       </div>
+      {/* Nav */}
       <div style={{background:C.card,borderBottom:`1px solid ${C.border}`,display:"flex",overflowX:"auto"}}>
-        {[["dashboard","📊 Dashboard"],["members","👥 Members"],["payments","💳 Payments"]].map(([id,lbl])=>(
-          <button key={id} onClick={()=>setTab(id)} style={{padding:"12px 16px",background:"none",color:tab===id?C.gold:C.muted,fontWeight:tab===id?700:400,borderBottom:tab===id?`2px solid ${C.gold}`:"2px solid transparent",borderRadius:0,fontSize:13,whiteSpace:"nowrap",flexShrink:0}}>
-            {lbl}
+        {navItems.map(([id,icon,lbl])=>(
+          <button key={id} onClick={()=>setTab(id)} style={{padding:"12px 14px",background:"none",color:tab===id?C.gold:C.muted,fontWeight:tab===id?700:400,borderBottom:tab===id?`2px solid ${C.gold}`:"2px solid transparent",borderRadius:0,fontSize:12,whiteSpace:"nowrap",flexShrink:0}}>
+            {icon} {lbl}
           </button>
         ))}
       </div>
+      {/* Content */}
       <div style={{padding:"14px",maxWidth:700,margin:"0 auto"}}>
-        {tab==="dashboard"&&<Dashboard members={members} payments={payments}/>}
-        {tab==="members"&&<Members members={members} setMembers={setMembers} payments={payments} showToast={showToast}/>}
-        {tab==="payments"&&<Payments members={members} payments={payments} setPayments={setPayments} showToast={showToast}/>}
+        {tab==="dashboard"&&<Dashboard members={members} payments={payments} groups={groups}/>}
+        {tab==="groups"&&<Groups groups={groups} setGroups={setGroups} showToast={showToast}/>}
+        {tab==="members"&&<Members members={members} setMembers={setMembers} payments={payments} groups={groups} showToast={showToast}/>}
+        {tab==="payments"&&<Payments members={members} payments={payments} setPayments={setPayments} groups={groups} showToast={showToast}/>}
       </div>
     </div>
   );
