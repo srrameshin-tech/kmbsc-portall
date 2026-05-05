@@ -775,9 +775,26 @@ function renderPubMembers(){
         </div>
         <div class="mpc-total${allP?' full':''}">₹${tot.toLocaleString('en-IN')}</div>
       </div>
-      <div class="month-dots">${dots}</div>
-      ${pc>0?`<div class="month-detail" id="mdet-${mid}" style="display:none">${details}</div>
-      <button class="mpc-toggle" data-mid="${mid}" onclick="toggleMdet(this)">▼ Payment Details காட்டு</button>`:''}`;
+      <div class="month-dots">${dots}</div>`;
+
+    if(pc>0){
+      const detDiv=document.createElement('div');
+      detDiv.className='month-detail';
+      detDiv.style.display='none';
+      detDiv.innerHTML=details;
+      card.appendChild(detDiv);
+
+      const togBtn=document.createElement('button');
+      togBtn.className='mpc-toggle';
+      togBtn.textContent='▼ Payment Details காட்டு';
+      togBtn.addEventListener('click',function(){
+        const show=detDiv.style.display==='none';
+        detDiv.style.display=show?'block':'none';
+        togBtn.textContent=show?'▲ மூடு':'▼ Payment Details காட்டு';
+      });
+      card.appendChild(togBtn);
+    }
+
     el.appendChild(card);
   });
 }
