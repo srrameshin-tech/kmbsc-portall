@@ -777,18 +777,18 @@ function renderPubMembers(){
       </div>
       <div class="month-dots">${dots}</div>
       ${pc>0?`<div class="month-detail" id="mdet-${mid}" style="display:none">${details}</div>
-      <button class="mpc-toggle" onclick="toggleMdet('${mid}')">▼ Payment Details காட்டு</button>`:''}`;
+      <button class="mpc-toggle" data-mid="${mid}" onclick="toggleMdet(this)">▼ Payment Details காட்டு</button>`:''}`;
     el.appendChild(card);
   });
 }
 
-function toggleMdet(mid){
+function toggleMdet(btn){
+  const mid=btn.getAttribute('data-mid');
   const det=document.getElementById('mdet-'+mid);
-  const btn=det&&det.nextElementSibling;
   if(!det) return;
   const show=det.style.display==='none';
   det.style.display=show?'block':'none';
-  if(btn) btn.textContent=show?'▲ மூடு':'▼ Payment Details காட்டு';
+  btn.textContent=show?'▲ மூடு':'▼ Payment Details காட்டு';
 }
 
 function renderPubMW(){
