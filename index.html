@@ -784,14 +784,19 @@ function renderPubMembers(){
       detDiv.innerHTML=details;
       card.appendChild(detDiv);
 
-      const togBtn=document.createElement('button');
+      const togBtn=document.createElement('div');
       togBtn.className='mpc-toggle';
       togBtn.textContent='▼ Payment Details காட்டு';
-      togBtn.addEventListener('click',function(){
+      togBtn.style.cursor='pointer';
+      // Use touchstart for mobile + click for desktop
+      function doToggle(e){
+        e.stopPropagation();
         const show=detDiv.style.display==='none';
         detDiv.style.display=show?'block':'none';
         togBtn.textContent=show?'▲ மூடு':'▼ Payment Details காட்டு';
-      });
+      }
+      togBtn.addEventListener('click', doToggle);
+      togBtn.addEventListener('touchend', doToggle);
       card.appendChild(togBtn);
     }
 
